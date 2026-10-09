@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # build.sh — reproduce the exact Strata engine build behind the numbers in README.md.
 #
-# Fork + branch: Niko1221/Strata at orca-port (not stock main). The recipe's
+# Engine: bodhi37/strata at orca-port (my fork, not stock upstream). The recipe's
 # measurements need that branch: prefix cache across turns, KV streaming,
 # mlocked hot tier, and the server-side sampler/MTP path.
 #
@@ -12,7 +12,7 @@ set -euo pipefail
 
 # orca-port commit the measurements were taken on.
 COMMIT=b90510c78e5334554a48c1ccd2b257019e19d896
-REPO=https://github.com/Niko1221/Strata.git
+REPO=https://github.com/bodhi37/strata.git
 BRANCH=orca-port
 
 SRC="${SRC:-$HOME/strata}"

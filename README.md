@@ -2,7 +2,7 @@
 # ~20-25 tok/sec decode (~39-45 tok/sec Q2), 300-100k+ tok/sec prefill
 # on just 12GB VRAM + 32GB RAM + NVME
 
-This fork is very experimental and behind upstream.
+Engine is my fork: [bodhi37/strata](https://github.com/bodhi37/strata) at `orca-port` — very experimental, behind upstream.
 
 | metric | measured |
 |---|---|
@@ -183,4 +183,4 @@ run-engine-mlock.sh \
 
 ## License
 
-MIT for these scripts and configs, see [LICENSE](LICENSE). SC117 card states Apache-2.0 for the model files. Strata is its own repo and license; this recipe only pins it.
+MIT for these scripts and configs, see [LICENSE](LICENSE). SC117 card states Apache-2.0 for the model files. Engine is [bodhi37/strata](https://github.com/bodhi37/strata) under its own license; this recipe only pins it.
