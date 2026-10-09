@@ -1,25 +1,22 @@
-# Serve Qwen3.8-Flash-Next (125B) on 12 GB VRAM + 32 GB RAM
+# Qwen3.8-Flash-Next-GSQ-RCO-Abliterated (IQ3_S) @ 131k context (12k reasoning budget)
+# ~20-25 tok/sec decode (~4, 100k+ tok/sec prefill
+# on just 12GB VRAM + 32GB RAM + NVME
 
-One 12 GB card and a full RAM box. Strata at `orca-port` commit `860f339`, not stock main.
-
-Result (IQ3_S, the config this box runs):
+This fork is very experimental and behind upstream.
 
 | metric | measured |
 |---|---|
-| Decode | 22.6 tok/s live. Window mean 20.6, median 20.5, p95 25.3. Engine 22.7, session 22.7. History 14.8-21.0 across the last 11 requests |
-| Prefill | 389 tok/s fresh (engine, 16k chunks). 4.5k-91.5k on prefix-cache hits; session reuses 92.1% (5.6M of 6.1M tokens skipped, 12.6x logical/eval work, ~04:01:40 saved) |
-| Context | 131072 tokens. Live 60,878 in use (46.4%), 70,194 free. Peak ctx 111,076. One active slot |
-| RAM | Server RSS 24.6 GiB. System 29.4/30.4 GiB at load (1.0 free, swap 11.9%). Hot tier 24.0 GiB mlocked. Budget the whole 30 GB |
-| GPU | RTX 4070 SUPER at 100%, 80.5 W during decode. Expert cache 1500 slots, pool workers 20 |
-| Load | 99 turns, 69,062 generated, 909 requests in the window (56.9M in / 478k out / 07:46:56 wall). Uptime 11:30:46 |
-
-This is not BF16. Base is 354 GB and does not fit. This runs the GSQ-RCO `IQ3_S` GGUFs at ~3.5 bits/weight in a 2-shard split (83.86 GB on disk). Authors report task average 93.26 vs 93.12 BF16. Details and caveats under Quality.
+| Decode | 22.6 tok/s live. Window mean 20.6, median 20.5, p95 25.3. |
+| Prefill | 389 tok/s fresh (engine, 16k chunks). 4.5k-91.5k on prefix-cache hits; session reuses 92.1% |
+| Decode (Q2_0) | 39-43 tok/s at 1-4k context (bench), 33-40 live agentic at ~25k, 30.4 at 120k. |
+| Prefill (Q2_0) | 260-744 tok/s fresh at 1-4k, 1090 at 120k. |
+| Context | 131072 tokens. |
 
 ---
 
 ## Models
 
-Same engine, same context for both. Pick one:
+Same engine, same context for both:
 
 | build | repo | files | size |
 |---|---|---|---:|
@@ -29,15 +26,13 @@ Same engine, same context for both. Pick one:
 
 The SC117 build is the ISTA quant with 144 write-to-residual tensors transplanted from [orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF](https://huggingface.co/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF) (`ssm_out` 36, `attn_output` 12, `ffn_down_shexp` 48, `ffn_down_exps` 48, all 48 layers). No GSQ value recomputed; per-tensor blake2b confirms the other 1079 tensors match upstream byte for byte. Cost is +0.25 GiB on IQ3_S (95 tensors moved to `Q8_0`, 49 kept their type). Shard 2 (28800138432 bytes) is the shared n-gram table, byte-identical across all four tiers and upstream. It is refusal-removed: supply your own moderation, do not put it in front of end users unguarded.
 
-Q2_0 config is checked in as `strata-sc117-q2.json` (port 8127, cache 3000, hot tier 21.0 GiB, prompt-cache 6, workers 12). Not the measured config. Smaller arena (664 vs 982 MB served per token), ~4 points weaker on task average — see Quality.
+Q2_0 config is checked in as `strata-sc117-q2.json` (port 8127, cache 3000, hot tier 21.0 GiB, prompt-cache 6, workers 12). Measured above. Smaller arena (664 vs 982 MB served per token), ~4 points weaker on task average — see Quality.
 
 ---
 
 ## Hardware
 
 Reference box: Ryzen 9 9900X 12C/24T, RTX 4070 SUPER 12 GB (12282 MiB, driver 615.71.09), 30.4 GiB RAM + 30 GiB zram swap (nominal 32 GB box), SPCC 1 TB NVMe (DRAM-less, PCIe 4.0 x4), Linux, CUDA 13.3 toolkit.
-
-Throughput follows SSD random-read bandwidth plus DRAM bandwidth for the hot tier. The old Kingston SNV2S1000G did 816 MB/s QD1 / ~969 saturated on `experts-native.bin`; the SPCC does 3227-3341 QD1 / ~5050 saturated at 0.63-0.71 ms per 2 MiB read. That is what moved this box from ~7-17 to ~20-23 tok/s on IQ3_S. A slower drive still runs, just slower.
 
 ---
 
@@ -93,13 +88,6 @@ Published numbers, xhigh reasoning effort, vs BF16 (from REPORT-GSQ §9; SWE-ben
 | GSQ-RCO Q2_0 | 66.4 GB | 81.14 | 96.67 | 89.39 | 89.07 |
 
 Task average 93.26 vs 93.12. Ties AIME25, +1.01 on GPQA-Diamond, -0.57 on LiveCodeBench.
-
-Caveats:
-
-- These are the release authors' benchmarks. Little independent verification.
-- The abliteration is not in these numbers. Unmeasured here.
-- Q2_0 is ~4 points off the base on task average (89.07 vs 93.12).
-- The pruned Coder build ("IQ1_M", actually 3.5 bpw over 256 experts) was evaluated and declined: same per-token work as IQ3_S, 91.3% on SWE-bench, breaks vision. See REPORT-GSQ §2-9.
 
 ---
 
@@ -192,44 +180,6 @@ run-engine-mlock.sh \
 # env: STRATA_RSPLIT=1, STRATA_STATIC_TIER=1, STRATA_NO_HITS=1
 # server: fit_max_tokens=true, sampler per-request (server side)
 ```
-
-| flag | reason |
-|---|---|
-| `--expert-cache 1500 --expert-cache-per-layer` | Per-layer GPU-resident experts. 1500 for IQ3_S; 3000 for Q2_0's smaller arena |
-| `--hot-ram-gib 24.0` | mlocked host tier from the profile. 24.0 IQ3_S / 21.0 Q2_0. Lower it if the box swaps |
-| `--mmap-experts` | Arena stays on SSD under page cache. Without it the 47 GB pack wants resident RAM that is not there |
-| `--pool-workers 20` | CPU expert threads. 20 here (12 for Q2_0); sweep on your box, SMT siblings measured worse |
-| `--kv q4_0` | KV for the full 131k window. `f16`/`q8_0` do not fit it |
-| `--max-context 131072` | Sized to that KV + tier budget. Arch allows 262144; RAM does not |
-| `--prompt-cache 2` | Conversation checkpoints. The 92.1% hit rate; 6 for Q2_0 |
-| `--prefill 16384` | Chunk size for fresh prompts. Larger is faster, less headroom |
-| `--spec 6 --spec-min-p 0.8 --suffix-draft 3 --mtp` | Verified drafts. Output unchanged |
-| `--host 127.0.0.1` | Loopback only. The reference `srv.sh` binds Tailscale + API key; add `--api-key` and set CORS if you expose it |
-
-No cap on reasoning length: `fit_max_tokens` is true and the server clamps `max_tokens` to the room left instead of 400ing — a 53,834-token ask runs (563 done, 53,271 to go, ETA 00:39:17 in the screenshot). One request at a time; extra clients queue.
-
----
-
-## What did not fit
-
-- The full 262144 arch context. Sized to 131072 for KV + 24 GiB tier + 1500 VRAM slots. Longer needs a smaller cache, lower tier, or more RAM.
-- A second slot. One active, queue 0 is the config — KV and tier are allocated once.
-- `f16` / `q8_0` KV at 131k. Twice to 4x the VRAM for no measured quality gain here.
-- Vision. Text-only; `mmproj` + `strata-vision` are a separate build.
-- The Coder pruned build. Evaluated, declined (§Quality). Same per-token work, worse SWE-bench, dead vision path.
-- Headroom. System sits at 1.0 GiB free with 11.9% swap in use during decode. Close browsers. The server's memory governor (`STRATA_MEM_FLOOR_MIB`, default 1536) sheds cold tier slices between requests; `STRATA_MEM_FLOOR_MIB=0` disables it. Watchdog kills a 300 s-silent engine.
-
----
-
-## Measuring it yourself
-
-- Decode/prefill: the server log and `logs/sc117-iq3s-final.log`, e.g. per-request `decode 22.6 tok/s`, `prefill 91,501.9 tok/s` on cache hits vs `389.3 tok/s` fresh-engine. Session ledger prints seen / evaluated / reused and the saved estimate.
-- Cache: `cache 92.1% · 12.6x logical/eval work` line. If reuse drops under ~80% on your workload, raise `--prompt-cache` and check turn-token chunking.
-- VRAM: sample peak during a request, not idle: `nvidia-smi --query-gpu=memory.used,memory.free --format=csv` once per second.
-- SSD: `build/qdbench <file> 2097152 1 4` (QD1) and `... 2097152 8 4` (saturated). Expect ~3200 / ~5050 MB/s on the SPCC; under ~1000 the recipe still works but decode tracks the miss rate.
-- Tensor sizes: read the GGUF header. Keys: `qwen4exp.block_count`, `qwen4exp.expert_count`, `qwen4exp.expert_used_count`, `qwen4exp.ple.*`, `split.*`.
-
----
 
 ## License
 
