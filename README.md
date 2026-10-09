@@ -1,5 +1,5 @@
 # Qwen3.8-Flash-Next-GSQ-RCO-Abliterated (IQ3_S) @ 131k context (12k reasoning budget)
-# ~20-25 tok/sec decode (~4, 100k+ tok/sec prefill
+# ~20-25 tok/sec decode (~39-45 tok/sec Q2), 300-100k+ tok/sec prefill
 # on just 12GB VRAM + 32GB RAM + NVME
 
 This fork is very experimental and behind upstream.
@@ -8,7 +8,7 @@ This fork is very experimental and behind upstream.
 |---|---|
 | Decode | 22.6 tok/s live. Window mean 20.6, median 20.5, p95 25.3. |
 | Prefill | 389 tok/s fresh (engine, 16k chunks). 4.5k-91.5k on prefix-cache hits; session reuses 92.1% |
-| Decode (Q2_0) | 39-43 tok/s at 1-4k context (bench), 33-40 live agentic at ~25k, 30.4 at 120k. |
+| Decode (Q2_0) | 39-44 tok/s at 1-4k context (bench), 33-40 live agentic at ~25k, 30.4 at 120k. |
 | Prefill (Q2_0) | 260-744 tok/s fresh at 1-4k, 1090 at 120k. |
 | Context | 131072 tokens. |
 
@@ -24,7 +24,7 @@ Same engine, same context for both:
 | Abliterated `Q2_0` | same repo | `Q2_0/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-Q2_0-00001-of-00002.gguf` + `...-00002-of-00002.gguf` | 38021379872 + 28800138432 bytes (35.4 + 26.8 GiB) |
 | Stock | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF) | `Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S-00001/00002-of-00002.gguf` | 83.6 GB |
 
-The SC117 build is the ISTA quant with 144 write-to-residual tensors transplanted from [orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF](https://huggingface.co/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF) (`ssm_out` 36, `attn_output` 12, `ffn_down_shexp` 48, `ffn_down_exps` 48, all 48 layers). No GSQ value recomputed; per-tensor blake2b confirms the other 1079 tensors match upstream byte for byte. Cost is +0.25 GiB on IQ3_S (95 tensors moved to `Q8_0`, 49 kept their type). Shard 2 (28800138432 bytes) is the shared n-gram table, byte-identical across all four tiers and upstream. It is refusal-removed: supply your own moderation, do not put it in front of end users unguarded.
+The SC117 build is the ISTA quant with 144 write-to-residual tensors transplanted from [orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF](https://huggingface.co/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF) (`ssm_out` 36, `attn_output` 12, `ffn_down_shexp` 48, `ffn_down_exps` 48, all 48 layers). No GSQ value recomputed; per-tensor blake2b confirms the other 1079 tensors match upstream byte for byte. Cost is +0.25 GiB on IQ3_S (95 tensors moved to `Q8_0`, 49 kept their type). Shard 2 (28800138432 bytes) is the shared n-gram table, byte-identical across all four tiers and upstream.
 
 Q2_0 config is checked in as `strata-sc117-q2.json` (port 8127, cache 3000, hot tier 21.0 GiB, prompt-cache 6, workers 12). Measured above. Smaller arena (664 vs 982 MB served per token), ~4 points weaker on task average — see Quality.
 
@@ -32,7 +32,7 @@ Q2_0 config is checked in as `strata-sc117-q2.json` (port 8127, cache 3000, hot 
 
 ## Hardware
 
-Reference box: Ryzen 9 9900X 12C/24T, RTX 4070 SUPER 12 GB (12282 MiB, driver 615.71.09), 30.4 GiB RAM + 30 GiB zram swap (nominal 32 GB box), SPCC 1 TB NVMe (DRAM-less, PCIe 4.0 x4), Linux, CUDA 13.3 toolkit.
+Reference box: Ryzen 9 9900X 12C/24T, RTX 4070 SUPER 12 GB (12282 MiB, driver 615.71.09), 30.4 GiB RAM + 30 GiB zram swap, SPCC 1 TB NVMe (DRAM-less, PCIe 4.0 x4), Linux, CUDA 13.3 toolkit.
 
 ---
 
@@ -50,7 +50,7 @@ Qwen3.8-Flash-Next is MoE (`general.architecture = qwen4exp`):
 | Attention | 24 heads, 2 KV heads, key/value 256, full attention every 4th layer |
 | Arch context | 262144 (recipe sizes 131072 for the KV + RAM budget) |
 
-Per decode token the engine touches 10 experts x 48 layers = 480 blobs. Blob and arena sizes come from the released RCO allocation (REPORT-GSQ §4):
+Per decode token the engine touches 10 experts x 48 layers = 480 blobs. Blob and arena sizes computed from the released RCO tensor-allocation files:
 
 | quant | arena | blob | MB served / token |
 |---|---:|---:|---:|
@@ -77,7 +77,7 @@ BF16 is 354 GB. On 12 GB VRAM you quantize regardless. Question is which quant.
 
 GSQ-RCO ([GSQ](https://arxiv.org/abs/2604.18556), [RCO](https://arxiv.org/abs/2605.00649), ISTA DASLab) is non-uniform: each tensor gets its own quant type from a gradient search under a size budget.
 
-Published numbers, xhigh reasoning effort, vs BF16 (from REPORT-GSQ §9; SWE-bench only reported for Coder):
+Published numbers, xhigh reasoning effort, vs BF16 (ISTA's published benchmarks; SWE-bench only reported for Coder):
 
 | variant | size | LCB v6 | AIME25 | GPQA-D | task avg |
 |---|---:|---:|---:|---:|---:|
