@@ -1,0 +1,26 @@
+# local run artifacts — never publish
+*.log
+logs/
+nohup.out
+
+# materialized serve configs (/tmp copies with $HOME paths)
+serve.local.sh
+build.local.sh
+*.local
+
+# model files, packs, and engine build trees
+*.gguf
+*.bin
+*.strc
+packs/
+ple/
+mtp/
+model/
+build/
+build-*/
+engine/
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
