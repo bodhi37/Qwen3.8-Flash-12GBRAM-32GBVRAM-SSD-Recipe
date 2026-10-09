@@ -13,7 +13,7 @@ Result (IQ3_S, the config this box runs):
 | GPU | RTX 4070 SUPER at 100%, 80.5 W during decode. Expert cache 1500 slots, pool workers 20 |
 | Load | 99 turns, 69,062 generated, 909 requests in the window (56.9M in / 478k out / 07:46:56 wall). Uptime 11:30:46 |
 
-This is not BF16. Base is 354 GB and does not fit. This runs the GSQ-RCO `IQ3_S` GGUFs at ~3.5 bits/weight in a 2-shard split (79 GB on disk). Authors report task average 93.26 vs 93.12 BF16. Details and caveats under Quality.
+This is not BF16. Base is 354 GB and does not fit. This runs the GSQ-RCO `IQ3_S` GGUFs at ~3.5 bits/weight in a 2-shard split (83.86 GB on disk). Authors report task average 93.26 vs 93.12 BF16. Details and caveats under Quality.
 
 ---
 
@@ -23,13 +23,13 @@ Same engine, same context for both. Pick one:
 
 | build | repo | files | size |
 |---|---|---|---:|
-| Stock | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF) | `Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S-00001/00002-of-00002.gguf` | 79 GB |
-| Abliterated (what this box runs) | same layout, local rename | `Qwen3.8-Flash-Next-GSQ-RCO-abliterated-IQ3_S-00001/00002-of-00002.gguf` | 52 + 27 GB |
-| Faster / dumber | same repo | `Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001/00002-of-00002.gguf` (or `-abliterated-` twin) | 36 + 27 GB |
+| Abliterated `IQ3_S` (what this box runs) | [SC117/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-GGUF](https://huggingface.co/SC117/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-GGUF) | `IQ3_S/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-IQ3_S-00001-of-00002.gguf` + `...-00002-of-00002.gguf` | 55063448064 + 28800138432 bytes (51.3 + 26.8 GiB) |
+| Abliterated `Q2_0` | same repo | `Q2_0/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-Q2_0-00001-of-00002.gguf` + `...-00002-of-00002.gguf` | 38021379872 + 28800138432 bytes (35.4 + 26.8 GiB) |
+| Stock | [ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF) | `Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S-00001/00002-of-00002.gguf` | 83.6 GB |
 
-The abliterated files are the ISTA quant with refusal directions edited in place. GGUF metadata still reads `quantized_by = ISTA DASLab`, `repo_url = .../Qwen3.8-Flash-Next-GSQ-RCO-GGUF`. There is no separate public URL for them; treat stock as the reproducible base and swap `-m` / `--native` to the abliterated shards if you have them. Shard 2 (27-28.8 GB) is the shared PLE/n-gram blob, byte-identical across quants.
+The SC117 build is the ISTA quant with 144 write-to-residual tensors transplanted from [orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF](https://huggingface.co/orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF) (`ssm_out` 36, `attn_output` 12, `ffn_down_shexp` 48, `ffn_down_exps` 48, all 48 layers). No GSQ value recomputed; per-tensor blake2b confirms the other 1079 tensors match upstream byte for byte. Cost is +0.25 GiB on IQ3_S (95 tensors moved to `Q8_0`, 49 kept their type). Shard 2 (28800138432 bytes) is the shared n-gram table, byte-identical across all four tiers and upstream. It is refusal-removed: supply your own moderation, do not put it in front of end users unguarded.
 
-Q2_0 config is checked in as `strata-sc117-q2.json` (port 8127, cache 3000, hot tier 21.0 GiB, prompt-cache 6, workers 12). It is not the measured config here. Expect roughly 2x the decode of IQ3_S from the smaller arena (664 vs 982 MB served per token), at a clear quality cost — see Quality. If you want speed, start there; if you want answers, stay on IQ3_S.
+Q2_0 config is checked in as `strata-sc117-q2.json` (port 8127, cache 3000, hot tier 21.0 GiB, prompt-cache 6, workers 12). Not the measured config. Smaller arena (664 vs 982 MB served per token), ~4 points weaker on task average — see Quality.
 
 ---
 
@@ -97,8 +97,8 @@ Task average 93.26 vs 93.12. Ties AIME25, +1.01 on GPQA-Diamond, -0.57 on LiveCo
 Caveats:
 
 - These are the release authors' benchmarks. Little independent verification.
-- The abliteration is not in these numbers. It edits residual writers, not the router or the n-gram table, but its cost is unmeasured here — expect a small alignment tax, not a capability jump.
-- Q2_0 is ~4 points off the base on task average (89.07 vs 93.12). Faster, visibly dumber. That matches the "Q2 is kinda stupid" field report.
+- The abliteration is not in these numbers. Unmeasured here.
+- Q2_0 is ~4 points off the base on task average (89.07 vs 93.12).
 - The pruned Coder build ("IQ1_M", actually 3.5 bpw over 256 experts) was evaluated and declined: same per-token work as IQ3_S, 91.3% on SWE-bench, breaks vision. See REPORT-GSQ §2-9.
 
 ---
@@ -108,20 +108,22 @@ Caveats:
 ### 1. Model
 
 ```bash
-# Stock IQ3_S (79 GB, 2 shards)
+# Abliterated IQ3_S (what this box runs; 83.86 GB, 2 shards)
+hf download SC117/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-GGUF \
+  --include "IQ3_S/*" --local-dir ~/models/sc117-abliterated
+
+# Abliterated Q2_0 (66.82 GB, 2 shards)
+hf download SC117/Qwen3.8-Flash-Next-GSQ-RCO-abliterated-GGUF \
+  --include "Q2_0/*" --local-dir ~/models/sc117-abliterated
+
+# Stock IQ3_S instead (83.6 GB)
 hf download ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF \
   Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S-00001-of-00002.gguf \
   Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S-00002-of-00002.gguf \
   --local-dir ~/models/qwen3.8-flash-next-gsq-rco
-
-# Stock Q2_0 (63 GB, 2 shards)
-hf download ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF \
-  Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001-of-00002.gguf \
-  Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00002-of-00002.gguf \
-  --local-dir ~/models/qwen3.8-flash-next-gsq-rco
 ```
 
-This box serves the `-abliterated-` renames of the same files (52+27 GB IQ3_S, 36+27 GB Q2_0). Any other `qwen4exp` GSQ-RCO GGUF pair with the same 2-shard layout is a drop-in; point `--native` at the shard holding `token_embd.weight` (shard 1 here) and `--ple-gguf` at the n-gram shard (shard 2).
+Name the folders exactly (`IQ3_S/`, `Q2_0/`). Any other `qwen4exp` GSQ-RCO GGUF pair with the same 2-shard layout is a drop-in; point `--native` at the shard holding `token_embd.weight` (shard 1 here) and `--ple-gguf` at the n-gram shard (shard 2).
 
 ### 2. Build
 
@@ -133,7 +135,7 @@ That commit is the measured one. Pin matters: kernels, tiering, and the server p
 
 ### 3. Pack
 
-The engine does not read GGUFs directly for experts. One-time prep per quant (paths are the measured box's; swap `$HOME` as needed):
+The engine does not read GGUFs directly for experts. One-time prep per quant (measured box's paths; adjust to where you put the files):
 
 ```bash
 # pack: native experts + dense + tokenizer (47 + 1.5 GB for IQ3_S)
@@ -201,10 +203,10 @@ run-engine-mlock.sh \
 | `--max-context 131072` | Sized to that KV + tier budget. Arch allows 262144; RAM does not |
 | `--prompt-cache 2` | Conversation checkpoints. The 92.1% hit rate; 6 for Q2_0 |
 | `--prefill 16384` | Chunk size for fresh prompts. Larger is faster, less headroom |
-| `--spec 6 --spec-min-p 0.8 --suffix-draft 3 --mtp` | DraftGuesses checked 6-8 at a time plus suffix repeats. Same answer, fewer rounds |
+| `--spec 6 --spec-min-p 0.8 --suffix-draft 3 --mtp` | Verified drafts. Output unchanged |
 | `--host 127.0.0.1` | Loopback only. The reference `srv.sh` binds Tailscale + API key; add `--api-key` and set CORS if you expose it |
 
-Reasoning budgets are "unlimited" in the sense that `fit_max_tokens` is true and the server clamps `max_tokens` to the room left instead of 400ing — a 53,834-token ask runs (563 done, 53,271 to go, ETA 00:39:17 in the screenshot). It still decodes one request at a time; extra clients queue.
+No cap on reasoning length: `fit_max_tokens` is true and the server clamps `max_tokens` to the room left instead of 400ing — a 53,834-token ask runs (563 done, 53,271 to go, ETA 00:39:17 in the screenshot). One request at a time; extra clients queue.
 
 ---
 
@@ -231,4 +233,4 @@ Reasoning budgets are "unlimited" in the sense that `fit_max_tokens` is true and
 
 ## License
 
-MIT for these scripts and configs, see [LICENSE](LICENSE). Models are Apache-2.0 per Hugging Face metadata (abliterated twins carry their own terms — check the file you actually serve). Strata is its own repo and license; this recipe only pins it.
+MIT for these scripts and configs, see [LICENSE](LICENSE). SC117 card states Apache-2.0 for the model files. Strata is its own repo and license; this recipe only pins it.
