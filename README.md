@@ -9,7 +9,7 @@ Engine is my fork: [bodhi37/strata](https://github.com/bodhi37/strata) at `orca-
 | Decode | 22.6 tok/s live. Window mean 20.6, median 20.5, p95 25.3. |
 | Prefill | 389 tok/s fresh (engine, 16k chunks). 4.5k-91.5k on prefix-cache hits; session reuses 92.1% |
 | Decode (Q2_0) | 39-44 tok/s at 1-4k context (bench), 33-40 live agentic at ~25k, 30.4 at 120k. |
-| Prefill (Q2_0) | 260-744 tok/s fresh at 1-4k, 1090 at 120k. |
+| Prefill (Q2_0) | 250-1260 tok/s fresh (252 @1k, 718 @4k, 1045 @33k, 1089 @120k); 32-59k on prefix-cache hits (59.3k @27k prompt with 18 fresh tok, 44.0k @64k, 42.3k @105k — reused tokens, TTFT collapses). |
 | Context | 131072 tokens. |
 
 ---
