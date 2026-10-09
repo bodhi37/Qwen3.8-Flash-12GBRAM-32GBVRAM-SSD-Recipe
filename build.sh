@@ -11,7 +11,7 @@
 set -euo pipefail
 
 # orca-port commit the measurements were taken on.
-COMMIT=860f339901f749dab4cde5a78c306d72a4a63f26
+COMMIT=b90510c78e5334554a48c1ccd2b257019e19d896
 REPO=https://github.com/Niko1221/Strata.git
 BRANCH=orca-port
 

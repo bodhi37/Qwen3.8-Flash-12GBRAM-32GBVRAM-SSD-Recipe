@@ -50,7 +50,7 @@ Qwen3.8-Flash-Next is MoE (`general.architecture = qwen4exp`):
 | Attention | 24 heads, 2 KV heads, key/value 256, full attention every 4th layer |
 | Arch context | 262144 (recipe sizes 131072 for the KV + RAM budget) |
 
-Per decode token the engine touches 10 experts x 48 layers = 480 blobs. Blob and arena sizes computed from the released RCO tensor-allocation files:
+Per decode token the engine touches 10 experts x 48 layers = 480 blobs:
 
 | quant | arena | blob | MB served / token |
 |---|---:|---:|---:|
@@ -77,7 +77,7 @@ BF16 is 354 GB. On 12 GB VRAM you quantize regardless. Question is which quant.
 
 GSQ-RCO ([GSQ](https://arxiv.org/abs/2604.18556), [RCO](https://arxiv.org/abs/2605.00649), ISTA DASLab) is non-uniform: each tensor gets its own quant type from a gradient search under a size budget.
 
-Published numbers, xhigh reasoning effort, vs BF16 (ISTA's published benchmarks; SWE-bench only reported for Coder):
+Published numbers, xhigh reasoning effort, vs BF16:
 
 | variant | size | LCB v6 | AIME25 | GPQA-D | task avg |
 |---|---:|---:|---:|---:|---:|
@@ -116,7 +116,7 @@ Name the folders exactly (`IQ3_S/`, `Q2_0/`). Any other `qwen4exp` GSQ-RCO GGUF 
 ### 2. Build
 
 ```bash
-./build.sh        # pins orca-port 860f339, flags in the script
+./build.sh        # pins orca-port b90510c, flags in the script
 ```
 
 That commit is the measured one. Pin matters: kernels, tiering, and the server protocol change between snapshots, so retune `--expert-cache` / `--hot-ram-gib` if you move. Needs CUDA 13.3 (`~/deps/cuda-13.3` or `/opt/cuda`), cmake, ninja, and a Python 3.10+ venv in the Strata checkout (`setup.sh` creates it). `setcap cap_ipc_lock,cap_sys_nice` needs root once — without it the hot tier stays reclaimable and decode collapses under pressure.
