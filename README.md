@@ -1,6 +1,6 @@
-# Qwen3.8-Flash-Next-GSQ-RCO-Abliterated (IQ3_S) @ 131k context (12k reasoning budget)
-# ~20-25 tok/sec decode (~39-45 tok/sec Q2), 300-100k+ tok/sec prefill
-# on just 12GB VRAM + 32GB RAM + NVME
+Qwen3.8-Flash-Next-GSQ-RCO-Abliterated (IQ3_S) @ 131k context (12k reasoning budget)
+~20-25 tok/sec decode (~39-45 tok/sec Q2), 300-700 tok/sec prefill
+on just 12GB VRAM + 32GB RAM + NVME
 
 Engine is my fork: [bodhi37/strata](https://github.com/bodhi37/strata) at `orca-port` — very experimental, behind upstream.
 
