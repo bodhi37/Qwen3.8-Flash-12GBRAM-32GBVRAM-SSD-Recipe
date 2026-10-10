@@ -1,4 +1,4 @@
-Qwen3.8-Flash-Next-GSQ-RCO-Abliterated (IQ3_S) @ 131k context (12k reasoning budget)
+Qwen3.8-Flash-Next-GSQ-RCO-Abliterated (IQ3_S) @ 131k context (44k output)
 ~20-25 tok/sec decode (~39-45 tok/sec Q2), 300-700 tok/sec prefill
 on just 12GB VRAM + 32GB RAM + NVME
 
